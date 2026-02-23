@@ -13,9 +13,9 @@ google-generativeai
 langchain-huggingface
 faiss-cpu
 
-# Force CPU-only torch (much smaller - 200MB vs 915MB)
+# Force CPU-only torch (compatible with Python 3.13)
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.2.0+cpu
+torch==2.7.0+cpu
 sentence-transformers
 
 # Backend
