@@ -1,0 +1,28 @@
+# Core LangChain (stable combo)
+langchain
+langchain-community
+langchain-classic
+
+# Gemini (Google AI)
+langchain-google-genai
+google-generativeai
+
+# Embeddings + Vector DB
+langchain-huggingface
+sentence-transformers
+faiss-cpu
+
+# Backend
+fastapi
+uvicorn
+pydantic
+python-dotenv
+
+# Frontend
+streamlit
+requests
+
+# Document ingestion
+unstructured
+unstructured[pdf]
+nltk
