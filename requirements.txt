@@ -1,4 +1,4 @@
-# Core LangChain (stable combo)
+# Core LangChain
 langchain
 langchain-community
 langchain-classic
@@ -25,6 +25,6 @@ streamlit
 requests
 
 # Document ingestion
-unstructured
-unstructured[pdf]
-nltk
+pypdf
+langchain-text-splitters
+python-multipart
