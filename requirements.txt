@@ -11,8 +11,12 @@ google-generativeai
 
 # Embeddings + Vector DB
 langchain-huggingface
-sentence-transformers
 faiss-cpu
+
+# Force CPU-only torch (much smaller - 200MB vs 915MB)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.0+cpu
+sentence-transformers
 
 # Backend
 fastapi
