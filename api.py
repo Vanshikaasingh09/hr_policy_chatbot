@@ -20,25 +20,14 @@ DOCS_DIR   = "data/policies"
 
 app = FastAPI(title="HR Policy Assistant API")
 
-# Embeddings
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+# Global variables - lazy loaded on startup
+embeddings  = None
+vectorstore = None
+retriever   = None
+llm         = None
+chain       = None
 
-def load_vectorstore():
-    return FAISS.load_local(VECTOR_DIR, embeddings, allow_dangerous_deserialization=True)
-
-vectorstore = load_vectorstore()
-retriever   = vectorstore.as_retriever(search_kwargs={"k": 4})
-
-# LLM
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    temperature=0,
-    api_key=os.getenv("GROQ_API_KEY")
-)
-
-# Prompt — instructs the LLM to cite the source doc inline
+# Prompt
 prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""You are a knowledgeable and helpful HR Policy Assistant.
@@ -57,6 +46,7 @@ Question: {question}
 Answer:"""
 )
 
+# build_chain defined BEFORE startup event
 def build_chain(ret):
     return (
         {
@@ -72,7 +62,25 @@ def build_chain(ret):
         | StrOutputParser()
     )
 
-chain = build_chain(retriever)
+# Startup event - loads models after uvicorn opens the port
+@app.on_event("startup")
+async def startup_event():
+    global embeddings, vectorstore, retriever, llm, chain
+    print("Loading embeddings...")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+    print("Loading vectorstore...")
+    vectorstore = FAISS.load_local(VECTOR_DIR, embeddings, allow_dangerous_deserialization=True)
+    retriever   = vectorstore.as_retriever(search_kwargs={"k": 4})
+    print("Loading LLM...")
+    llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        temperature=0,
+        api_key=os.getenv("GROQ_API_KEY")
+    )
+    chain = build_chain(retriever)
+    print("✅ App ready!")
 
 STOP_WORDS = {"the","a","an","is","are","be","to","of","and","in","that","it",
               "for","on","with","as","was","at","by","from","or","but","not","this","have"}
@@ -89,7 +97,6 @@ def get_sources(question: str, answer: str = ""):
         key  = f"{name}|{page}"
         if key in seen:
             continue
-        # Check how many meaningful words from this chunk appear in the answer
         chunk_words = set(d.page_content.lower().split())
         meaningful  = [w for w in chunk_words if len(w) > 4 and w not in STOP_WORDS]
         matches     = sum(1 for w in meaningful if w in answer_lower)
@@ -101,9 +108,16 @@ def get_sources(question: str, answer: str = ""):
 class QueryRequest(BaseModel):
     question: str
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.post("/ask")
 def ask(req: QueryRequest):
     try:
+        if retriever is None or chain is None:
+            return {"answer": "Service is still loading, please try again in a moment.", "sources": []}
+
         docs = retriever.invoke(req.question)
         if not docs:
             return {"answer": "I don't know based on the available policy documents.", "sources": []}
@@ -113,10 +127,8 @@ def ask(req: QueryRequest):
         if not answer or answer.lower().startswith("i don't know"):
             return {"answer": answer or "I don't know based on the available policy documents.", "sources": []}
 
-        # Now filter sources against the actual answer
         _, sources = get_sources(req.question, answer)
 
-        # Fallback: if filter was too strict, use the top doc at least
         if not sources and docs:
             top = docs[0]
             sources = [{
@@ -178,7 +190,3 @@ def list_documents():
         ],
         "count": len(files)
     }
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
